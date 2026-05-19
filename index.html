@@ -936,7 +936,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 });
 
 // Forms
-const TG_TOKEN='8667069816:AAGZexFgv8l8tmMtDjfoS42W2tlaVwYCBPg',TG_CHAT='8667069816';
+const TG_TOKEN='8667069816:AAGZexFgv8l8tmMtDjfoS42W2tlaVwYCBPg',TG_CHAT='549379191';
 function sendToTelegram(n,p,src){
   const text=`📩 Нова заявка (${src})\n👤 Ім'я: ${n}\n📞 Телефон: ${p}`;
   fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:TG_CHAT,text})}).catch(()=>{});
