@@ -820,6 +820,7 @@ footer{background:var(--dark);padding:64px 52px 36px}
         <input type="text" class="finput" id="cName" placeholder="Ваше ім'я" autocomplete="name">
         <input type="tel" class="finput" id="cPhone" placeholder="+38 (0__) ___ ____" autocomplete="tel">
       </div>
+      <div id="recaptcha-contact" style="margin:16px 0"></div>
       <button class="fsub" onclick="submitForm()">Надіслати заявку</button>
       <div class="fsuccess" id="formOk">Дякуємо! Ми зв'яжемось з вами найближчим часом.</div>
     </div>
@@ -880,6 +881,7 @@ footer{background:var(--dark);padding:64px 52px 36px}
       <input type="text" class="finput" id="mName" placeholder="Ваше ім'я" autocomplete="name">
       <input type="tel" class="finput" id="mPhone" placeholder="+38 (063) ___-__-__" autocomplete="tel">
     </div>
+    <div id="recaptcha-modal" style="margin:16px 0"></div>
     <button class="fsub" onclick="submitModal()">Надіслати заявку</button>
     <div class="fsuccess" id="mOk">Дякуємо! Ми зв'яжемось з вами найближчим часом.</div>
     <p style="margin-top:16px;font-size:13px;color:rgba(45,30,22,.38)">або: <a href="tel:+380635650143" style="color:var(--blue);text-decoration:none">+38 (063) 565 0143</a></p>
@@ -947,23 +949,55 @@ document.getElementById('tabs').addEventListener('click',e=>{
   setTimeout(()=>{if(activePanel)activePanel.style.minHeight='';},100);
 });
 
-// Forms
-const TG_TOKEN='8667069816:AAGZexFgv8l8tmMtDjfoS42W2tlaVwYCBPg',TG_CHAT='549379191';
-function sendToTelegram(n,p,src){
-  const text=`📩 Нова заявка (${src})\n👤 Ім'я: ${n}\n📞 Телефон: ${p}`;
-  fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:TG_CHAT,text})}).catch(()=>{});
+// Forms — Formspree + reCAPTCHA
+const FORM_ENDPOINT='https://formspree.io/f/mwlkdlrg';
+const RECAPTCHA_SITEKEY='6LePwLMtAAAAAMYePibPZvUsGDU_LTwHT20o6z-i';
+let rcContact,rcModal;
+function onRecaptchaLoad(){
+  rcContact=grecaptcha.render('recaptcha-contact',{sitekey:RECAPTCHA_SITEKEY});
+  rcModal=grecaptcha.render('recaptcha-modal',{sitekey:RECAPTCHA_SITEKEY});
 }
-function submitForm(){
+const SEND_FAIL_MSG='Не вдалося надіслати заявку. Зателефонуйте нам, будь ласка: +38 (063) 565 0143';
+async function submitToFormspree(name,phone,source,widgetId){
+  if(typeof grecaptcha==='undefined'||widgetId===undefined){
+    return {ok:false,message:'Форма ще завантажується, спробуйте за кілька секунд'};
+  }
+  const token=grecaptcha.getResponse(widgetId);
+  if(!token){
+    return {ok:false,message:'Будь ласка, підтвердіть, що ви не робот'};
+  }
+  try{
+    const res=await fetch(FORM_ENDPOINT,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify({name,phone,source,'g-recaptcha-response':token})
+    });
+    grecaptcha.reset(widgetId);
+    if(res.ok) return {ok:true};
+    let detail='';
+    try{
+      const data=await res.json();
+      if(Array.isArray(data.errors)&&data.errors.length) detail=data.errors.map(e=>e.message).join('; ');
+    }catch(_){}
+    return {ok:false,message:detail?`${SEND_FAIL_MSG}\n(${detail})`:SEND_FAIL_MSG};
+  }catch(e){
+    grecaptcha.reset(widgetId);
+    return {ok:false,message:SEND_FAIL_MSG};
+  }
+}
+async function submitForm(){
   const n=document.getElementById('cName').value.trim(),p=document.getElementById('cPhone').value.trim();
   if(!n||!p){alert('Будь ласка, заповніть ім\'я та номер телефону');return}
-  sendToTelegram(n,p,'Контакти');
+  const r=await submitToFormspree(n,p,'Контакти',rcContact);
+  if(!r.ok){alert(r.message);return}
   document.getElementById('formOk').style.display='block';
   document.getElementById('cName').value='';document.getElementById('cPhone').value='';
 }
-function submitModal(){
+async function submitModal(){
   const n=document.getElementById('mName').value.trim(),p=document.getElementById('mPhone').value.trim();
   if(!n||!p){alert('Будь ласка, заповніть ім\'я та номер телефону');return}
-  sendToTelegram(n,p,'Записатись');
+  const r=await submitToFormspree(n,p,'Записатись',rcModal);
+  if(!r.ok){alert(r.message);return}
   document.getElementById('mOk').style.display='block';
   document.getElementById('mName').value='';document.getElementById('mPhone').value='';
 }
@@ -973,6 +1007,7 @@ if(!localStorage.getItem('nua_ck')){setTimeout(()=>document.getElementById('cook
 document.getElementById('cOk').addEventListener('click',()=>{localStorage.setItem('nua_ck','1');document.getElementById('cookieBar').classList.remove('show')});
 document.getElementById('cNo').addEventListener('click',()=>{localStorage.setItem('nua_ck','0');document.getElementById('cookieBar').classList.remove('show')});
 </script>
+<script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
 
 <!-- FLOAT BOOK BTN -->
 <a class="fbook2" href="https://l.instagram.com/?u=https%3A%2F%2Fn1404681.alteg.io%2F%3Futm_source%3Dig%26utm_medium%3Dsocial%26utm_content%3Dlink_in_bio%26fbclid%3DPAZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQPOTM2NjE5NzQzMzkyNDU5AAGnzKjYa1TiWj7E-HqYtHhDq-_LG034eqMYx-j7A3suYt9DkYjmT2U6E0Gy1a0_aem_ZCqF26af9MLoLEmuMp7r0A%26utm_id%3D97760_v0_s00_e0_tv3&e=AUASKD2sVErXeYUSVSHmt-w8_UxNJieoqMjy0ljx9DB8NVrUYKo12Cxscuwvope9f1mt725QwBJzVsfA8poiCDpg9oz1Z7HL9NoBt4gWGuQ_WB9IpKUktsImIRLXXUQVMje1fRg" target="_blank" rel="noopener" aria-label="Онлайн запис">
